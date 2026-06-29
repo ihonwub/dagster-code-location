@@ -1,0 +1,32 @@
+# =============================================================================
+# Default values for the dagster-code-location wrapper chart.
+#
+# The tenant ApplicationSet (Repo A) OVERRIDES the per-team bits at install time:
+#   - dagster-user-deployments.deployments  (the team's image/module/port)
+#   - dagster-user-deployments.serviceAccount (the team's IRSA role)
+#   - networkPolicy.locationName / .port     (the team's name + gRPC port)
+# Everything here is just a safe default so the chart renders on its own.
+# =============================================================================
+
+# ---- Values passed straight through to the official subchart ----------------
+# (Keys under `dagster-user-deployments:` reach the upstream chart unchanged.)
+dagster-user-deployments:
+  # The tenant ApplicationSet replaces this list with the team's single
+  # deployment, named `dagster-loc-<name>` so its Service DNS matches the
+  # workspace registry host.
+  deployments: []
+
+  # >>> VERIFY for your pinned chart version <<<
+  # A standalone code server still needs to know how to reach Postgres and where
+  # DAGSTER_HOME is, to launch runs. Wire these to match the control plane:
+  #   global:
+  #     postgresqlSecretName: dagster-postgresql-secret
+  #     dagsterHome: /opt/dagster/dagster_home
+  #     serviceAccountName: ""        # per-team SA is set by the tenant appset
+
+# ---- Inputs consumed by THIS chart's templates/networkpolicy.yaml ------------
+networkPolicy:
+  enabled: true
+  locationName: ""        # set per team by the tenant appset, e.g. "signals"
+  port: 4000              # set per team
+  instanceNamespace: dagster   # the control-plane namespace allowed to reach gRPC

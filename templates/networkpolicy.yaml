@@ -1,0 +1,39 @@
+{{- /*
+  PER-LOCATION NETWORK POLICY  (moved here from Repo A's workspace chart).
+
+  Locks down the team's gRPC code-server pod so that ONLY the Dagster control
+  plane (webserver + daemon, in `instanceNamespace`) may reach its gRPC port.
+  Everything else is denied.
+
+  WHY IT LIVES HERE NOW:
+    This chart is installed by the SAME Argo App that creates the team's
+    namespace (CreateNamespace=true). So the NetworkPolicy and its namespace are
+    created together -- the old "NetworkPolicy synced before its namespace
+    existed" race is gone, and Repo A's workspace App no longer needs a retry.
+
+  No `namespace:` field below on purpose: the resource lands in the RELEASE
+  namespace, which is the team's namespace (dagster-<name>).
+*/ -}}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-instance-grpc
+spec:
+  podSelector:
+    matchLabels:
+      # The official chart labels code-server pods with this key. We name the
+      # deployment `dagster-loc-<name>`, so the label value matches too.
+      # >>> VERIFY the label key for your pinned chart version <<<
+      #   kubectl -n dagster-<name> get pod --show-labels
+      deployment: dagster-loc-{{ .Values.networkPolicy.locationName }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.instanceNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.port }}
+{{- end }}

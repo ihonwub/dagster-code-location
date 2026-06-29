@@ -1,0 +1,34 @@
+# =============================================================================
+# REPO B  --  dagster-code-location  (the tenant WRAPPER chart)
+# -----------------------------------------------------------------------------
+# This chart deploys ONE Dagster code location (one team's gRPC code-server pod)
+# by wrapping Dagster's OFFICIAL `dagster-user-deployments` chart and adding a
+# per-location NetworkPolicy.
+#
+# WHO USES IT: the tenant ApplicationSet in Repo A
+# (manifests/code-locations-appset.yaml) installs this chart once per team,
+# passing each team's values built from charts/dagster-workspace/locations/<team>.yaml.
+#
+# WHY IT EXISTS:
+#   - Pin + test the official chart version in ONE place.
+#   - Bundle the per-location NetworkPolicy so it travels WITH the deployment
+#     (same Argo App that creates the namespace -> no ordering race).
+#
+# PUBLISH: push this chart to your OCI registry (e.g. ECR) so Repo A can pull it:
+#   helm dependency update .
+#   helm package .
+#   helm push dagster-code-location-0.1.0.tgz oci://<registry>
+# =============================================================================
+apiVersion: v2
+name: dagster-code-location
+description: >-
+  Wrapper around the official dagster-user-deployments chart that deploys one
+  Dagster code location plus its NetworkPolicy. Consumed by the tenant
+  ApplicationSet in the mde-gitops-manifests repo.
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: dagster-user-deployments
+    version: "1.13.10" # PIN to your tested version
+    repository: https://dagster-io.github.io/helm
