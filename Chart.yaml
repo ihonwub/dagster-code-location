@@ -6,25 +6,27 @@
 # per-location NetworkPolicy.
 #
 # WHO USES IT: the tenant ApplicationSet in Repo A
-# (manifests/code-locations-appset.yaml) installs this chart once per team,
-# passing each team's values built from charts/dagster-workspace/locations/<team>.yaml.
+# (apps/dagster-code-locations/applicationset.yaml) installs this chart once per
+# team, passing each team's values built from
+# apps/dagster-workspace/locations/<team>.yaml.
 #
 # WHY IT EXISTS:
 #   - Pin + test the official chart version in ONE place.
 #   - Bundle the per-location NetworkPolicy so it travels WITH the deployment
 #     (same Argo App that creates the namespace -> no ordering race).
 #
-# PUBLISH: push this chart to your OCI registry (e.g. ECR) so Repo A can pull it:
-#   helm dependency update .
-#   helm package .
-#   helm push dagster-code-location-0.1.0.tgz oci://<registry>
+# HOW REPO A CONSUMES IT: Argo CD pulls this chart straight from this git repo
+# (the ApplicationSet source points at the repo + path "."). No OCI/ECR publish
+# step is needed -- the dagster-user-deployments subchart is fetched at render
+# time from the repository pinned below, so charts/ and Chart.lock are NOT
+# committed (see .gitignore).
 # =============================================================================
 apiVersion: v2
 name: dagster-code-location
 description: >-
   Wrapper around the official dagster-user-deployments chart that deploys one
   Dagster code location plus its NetworkPolicy. Consumed by the tenant
-  ApplicationSet in the mde-gitops-manifests repo.
+  ApplicationSet in the dagster-release repo (Repo A).
 type: application
 version: 0.1.0
 

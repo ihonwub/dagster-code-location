@@ -17,27 +17,36 @@ Repo A · tenant ApplicationSet  (one Argo App per locations/<team>.yaml)
 THIS CHART · dagster-code-location
    │   Chart.yaml depends on:
    ▼
-OFFICIAL · dagster-user-deployments @ 1.11.7
+OFFICIAL · dagster-user-deployments @ 1.13.10
    │   renders:
    ▼
 Kubernetes (namespace dagster-<team>):
-     Deployment dagster-loc-<team>   (the gRPC code server)
-     Service    dagster-loc-<team>   (DNS the control plane connects to)
+     Deployment  (the gRPC code server; Helm release dagster-loc-<team>)
+     Service <team>   (DNS the control plane connects to:
+                       <team>.dagster-<team>.svc.cluster.local)
    + from this chart: NetworkPolicy allow-instance-grpc
 ```
+
+The official chart names the Service after the deployment entry's `name`, so a
+file named `signals` yields Service `signals` and host
+`signals.dagster-signals.svc` — which is exactly what Repo A's workspace registry
+derives. The two halves agree by convention, not configuration.
 
 ## What a DS team provides (indirectly)
 
 DS teams do **not** edit this chart. They edit one file in Repo A:
-`charts/dagster-workspace/locations/<team>.yaml` (name, module, port, image).
-Repo A's tenant ApplicationSet turns that file into the values below.
+`apps/dagster-workspace/locations/<team>.yaml` — and that file is a **standard
+upstream `dagster-user-deployments` deployment entry** (`name`, `port`,
+`dagsterApiGrpcArgs`, `image`, `resources`, …). Repo A's tenant ApplicationSet
+splats it whole into the values below.
 
 ## Values
 
 | Key | Set by | Meaning |
 |---|---|---|
-| `dagster-user-deployments.deployments` | tenant appset | the team's single deployment (`name: dagster-loc-<name>`, image, module, port) |
-| `dagster-user-deployments.serviceAccount` | tenant appset | per-team ServiceAccount + IRSA role |
+| `dagster-user-deployments.deployments` | tenant appset | the team's single deployment, splatted from their location file (`name` = the file's `name`, image, gRPC args, port, …) |
+| `dagster-user-deployments.global.postgresqlAuthWifEnabled` | tenant appset | `true` — skips Postgres-secret injection into the code-server pod (it doesn't need DB creds; run pods do, in the `dagster` ns) |
+| `dagster-user-deployments.serviceAccount` | tenant appset | per-team ServiceAccount (the `eks.amazonaws.com/role-arn` annotation is vestigial on Pod Identity clusters; per-location identity moves to a Pod Identity association as a follow-up) |
 | `networkPolicy.locationName` | tenant appset | team name, for the pod selector |
 | `networkPolicy.port` | tenant appset | the gRPC port to allow |
 | `networkPolicy.instanceNamespace` | default `dagster` | control-plane namespace allowed in |
@@ -47,22 +56,24 @@ Repo A's tenant ApplicationSet turns that file into the values below.
 > ApplicationSet, not here. This chart's job is to pin the official chart, ship
 > safe defaults, and add the NetworkPolicy.
 
-## Publish (so Repo A can pull it)
+## How Repo A consumes it
+
+Argo CD pulls this chart **straight from this git repo** — the tenant
+ApplicationSet (`apps/dagster-code-locations/applicationset.yaml`) source points at
+the repo + path `.` and `targetRevision: main`. There is **no OCI publish step**;
+the `dagster-user-deployments` subchart is fetched at render time from the
+repository pinned in `Chart.yaml`, so `charts/` and `Chart.lock` are not committed
+(see `.gitignore`). Local sanity check:
 
 ```sh
-helm dependency update .
-helm lint . && helm template . --set networkPolicy.locationName=demo   # sanity check
-helm package .
-helm push dagster-code-location-0.1.0.tgz oci://<your-registry>
+helm dependency build .
+helm template . --set networkPolicy.locationName=demo --set networkPolicy.port=4001
 ```
-
-Then pin that version in Repo A's `manifests/code-locations-appset.yaml`
-(`targetRevision`).
 
 ## Verify before you ship
 
-1. **Subchart globals** — a standalone code server still needs Postgres creds and
-   `DAGSTER_HOME` to launch runs. Wire `dagster-user-deployments.global.*` to
-   match the control plane.
-2. **Pod label key** — the NetworkPolicy selects `deployment: dagster-loc-<name>`;
-   confirm the official chart's label key for your version.
+1. **Subchart version** — `Chart.yaml` pins `dagster-user-deployments` to the
+   version the control plane runs (currently `1.13.10`). Keep them aligned.
+2. **Pod label key** — the NetworkPolicy selects `deployment: <name>` (the
+   deployment entry's name); confirm the official chart's label key for your
+   version.
