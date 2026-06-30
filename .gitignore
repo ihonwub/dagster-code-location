@@ -1,0 +1,5 @@
+# Helm dependency build artifacts. Argo CD (and `helm dependency build`) fetch the
+# dagster-user-deployments subchart at render time from the repo pinned in
+# Chart.yaml, so neither the vendored archive nor the lock needs to be committed.
+charts/
+Chart.lock
